@@ -30,6 +30,7 @@ import {
   ATTR_NET_PEER_NAME,
   ATTR_NET_PEER_PORT,
 } from './semconv';
+import { ATTR_DB_OPERATION_NAME } from '@opentelemetry/semantic-conventions';
 import { safeExecuteInTheMiddle } from '@opentelemetry/instrumentation';
 import { endSpan } from './utils';
 import { defaultDbStatementSerializer } from '@opentelemetry/redis-common';
@@ -120,11 +121,28 @@ export class IORedisInstrumentation extends InstrumentationBase<IORedisInstrumen
         return original.apply(this, arguments);
       }
 
+      // Detect if this command is part of a multi/pipeline context
+      let operationName = cmd.name;
+      const command = cmd as any;
+      
+      // Check if the command is part of a multi transaction or pipeline
+      // In ioredis, commands have properties that indicate their context:
+      // - inTransaction: true for commands in a MULTI/EXEC transaction
+      // - pipelineIndex: set for commands in a pipeline (but inTransaction is false)
+      // Note: Don't prefix the 'multi', 'exec', or 'pipeline' commands themselves
+      if (command.inTransaction && cmd.name !== 'multi' && cmd.name !== 'exec') {
+        operationName = `MULTI ${cmd.name}`;
+      } else if (command.pipelineIndex !== undefined && command.pipelineIndex !== null &&
+                 cmd.name !== 'exec' && cmd.name !== 'multi') {
+        operationName = `PIPELINE ${cmd.name}`;
+      }
+
       const span = instrumentation.tracer.startSpan(cmd.name, {
         kind: SpanKind.CLIENT,
         attributes: {
           [ATTR_DB_SYSTEM]: DB_SYSTEM_VALUE_REDIS,
           [ATTR_DB_STATEMENT]: dbStatementSerializer(cmd.name, cmd.args),
+          [ATTR_DB_OPERATION_NAME]: operationName,
         },
       });
 
