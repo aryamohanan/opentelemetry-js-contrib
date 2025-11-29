@@ -22,16 +22,17 @@ import {
 } from '@opentelemetry/instrumentation';
 import { IORedisInstrumentationConfig } from './types';
 import { IORedisCommand, RedisInterface } from './internal-types';
+import { ATTR_DB_STATEMENT } from './semconv';
 import {
-  DB_SYSTEM_VALUE_REDIS,
-  ATTR_DB_CONNECTION_STRING,
-  ATTR_DB_STATEMENT,
-  ATTR_DB_SYSTEM,
-  ATTR_NET_PEER_NAME,
-  ATTR_NET_PEER_PORT,
-} from './semconv';
-import { safeExecuteInTheMiddle } from '@opentelemetry/instrumentation';
-import { endSpan } from './utils';
+  ATTR_DB_OPERATION_NAME,
+  ATTR_DB_QUERY_TEXT,
+} from '@opentelemetry/semantic-conventions';
+import {
+  safeExecuteInTheMiddle,
+  SemconvStability,
+  semconvStabilityFromStr,
+} from '@opentelemetry/instrumentation';
+import { endSpan, getClientAttributes } from './utils';
 import { defaultDbStatementSerializer } from '@opentelemetry/redis-common';
 /** @knipignore */
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version';
@@ -41,12 +42,23 @@ const DEFAULT_CONFIG: IORedisInstrumentationConfig = {
 };
 
 export class IORedisInstrumentation extends InstrumentationBase<IORedisInstrumentationConfig> {
+  private _semconvStability: SemconvStability;
+
   constructor(config: IORedisInstrumentationConfig = {}) {
     super(PACKAGE_NAME, PACKAGE_VERSION, { ...DEFAULT_CONFIG, ...config });
+    this._semconvStability = semconvStabilityFromStr(
+      'database',
+      process.env.OTEL_SEMCONV_STABILITY_OPT_IN
+    );
   }
 
   override setConfig(config: IORedisInstrumentationConfig = {}) {
     super.setConfig({ ...DEFAULT_CONFIG, ...config });
+
+    this._semconvStability = semconvStabilityFromStr(
+      'database',
+      process.env.OTEL_SEMCONV_STABILITY_OPT_IN
+    );
   }
 
   init(): InstrumentationNodeModuleDefinition[] {
@@ -120,12 +132,54 @@ export class IORedisInstrumentation extends InstrumentationBase<IORedisInstrumen
         return original.apply(this, arguments);
       }
 
+      let operationName = cmd.name;
+      const command = cmd as any;
+
+      // Check if the command is part of a multi transaction or pipeline
+      // In ioredis, commands have properties that indicate their context:
+      // - inTransaction: true for commands in a MULTI/EXEC transaction
+      // - pipelineIndex: set for commands in a pipeline (but inTransaction is false)
+      // Note: Don't prefix the 'multi', 'exec', or 'pipeline' commands themselves
+      if (
+        command.inTransaction &&
+        cmd.name !== 'multi' &&
+        cmd.name !== 'exec'
+      ) {
+        operationName = `MULTI ${cmd.name}`;
+      } else if (
+        command.pipelineIndex !== undefined &&
+        command.pipelineIndex !== null &&
+        cmd.name !== 'exec' &&
+        cmd.name !== 'multi'
+      ) {
+        operationName = `PIPELINE ${cmd.name}`;
+      }
+
+      const { host, port } = this.options;
+
+      const attributes = getClientAttributes(
+        host,
+        port,
+        instrumentation._semconvStability
+      );
+
+      if (instrumentation._semconvStability & SemconvStability.STABLE) {
+        attributes[ATTR_DB_OPERATION_NAME] = operationName;
+      }
+
+      const dbStatement = dbStatementSerializer(cmd.name, cmd.args);
+      if (dbStatement != null) {
+        if (instrumentation._semconvStability & SemconvStability.OLD) {
+          attributes[ATTR_DB_STATEMENT] = dbStatement;
+        }
+        if (instrumentation._semconvStability & SemconvStability.STABLE) {
+          attributes[ATTR_DB_QUERY_TEXT] = dbStatement;
+        }
+      }
+
       const span = instrumentation.tracer.startSpan(cmd.name, {
         kind: SpanKind.CLIENT,
-        attributes: {
-          [ATTR_DB_SYSTEM]: DB_SYSTEM_VALUE_REDIS,
-          [ATTR_DB_STATEMENT]: dbStatementSerializer(cmd.name, cmd.args),
-        },
+        attributes,
       });
 
       const { requestHook } = config;
@@ -145,14 +199,6 @@ export class IORedisInstrumentation extends InstrumentationBase<IORedisInstrumen
           true
         );
       }
-
-      const { host, port } = this.options;
-
-      span.setAttributes({
-        [ATTR_NET_PEER_NAME]: host,
-        [ATTR_NET_PEER_PORT]: port,
-        [ATTR_DB_CONNECTION_STRING]: `redis://${host}:${port}`,
-      });
 
       try {
         const result = original.apply(this, arguments);
@@ -199,20 +245,25 @@ export class IORedisInstrumentation extends InstrumentationBase<IORedisInstrumen
         return original.apply(this, arguments);
       }
 
+      const { host, port } = this.options;
+      const attributes = getClientAttributes(
+        host,
+        port,
+        instrumentation._semconvStability
+      );
+
+      if (instrumentation._semconvStability & SemconvStability.OLD) {
+        attributes[ATTR_DB_STATEMENT] = 'connect';
+      }
+      if (instrumentation._semconvStability & SemconvStability.STABLE) {
+        attributes[ATTR_DB_QUERY_TEXT] = 'connect';
+      }
+
       const span = instrumentation.tracer.startSpan('connect', {
         kind: SpanKind.CLIENT,
-        attributes: {
-          [ATTR_DB_SYSTEM]: DB_SYSTEM_VALUE_REDIS,
-          [ATTR_DB_STATEMENT]: 'connect',
-        },
+        attributes,
       });
-      const { host, port } = this.options;
 
-      span.setAttributes({
-        [ATTR_NET_PEER_NAME]: host,
-        [ATTR_NET_PEER_PORT]: port,
-        [ATTR_DB_CONNECTION_STRING]: `redis://${host}:${port}`,
-      });
       try {
         const client = original.apply(this, arguments);
         endSpan(span, null);

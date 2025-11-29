@@ -14,7 +14,21 @@
  * limitations under the License.
  */
 
-import { Span, SpanStatusCode } from '@opentelemetry/api';
+import { Attributes, Span, SpanStatusCode } from '@opentelemetry/api';
+import { SemconvStability } from '@opentelemetry/instrumentation';
+import {
+  ATTR_DB_SYSTEM_NAME,
+  ATTR_SERVER_ADDRESS,
+  ATTR_SERVER_PORT,
+} from '@opentelemetry/semantic-conventions';
+import {
+  ATTR_DB_CONNECTION_STRING,
+  ATTR_DB_SYSTEM,
+  ATTR_NET_PEER_NAME,
+  ATTR_NET_PEER_PORT,
+  DB_SYSTEM_NAME_VALUE_REDIS,
+  DB_SYSTEM_VALUE_REDIS,
+} from './semconv';
 
 export const endSpan = (
   span: Span,
@@ -29,3 +43,30 @@ export const endSpan = (
   }
   span.end();
 };
+
+export function getClientAttributes(
+  host: string | undefined,
+  port: number | undefined,
+  semconvStability: SemconvStability
+): Attributes {
+  const attributes: Attributes = {};
+
+  if (semconvStability & SemconvStability.OLD) {
+    Object.assign(attributes, {
+      [ATTR_DB_SYSTEM]: DB_SYSTEM_VALUE_REDIS,
+      [ATTR_NET_PEER_NAME]: host,
+      [ATTR_NET_PEER_PORT]: port,
+      [ATTR_DB_CONNECTION_STRING]: `redis://${host}:${port}`,
+    });
+  }
+
+  if (semconvStability & SemconvStability.STABLE) {
+    Object.assign(attributes, {
+      [ATTR_DB_SYSTEM_NAME]: DB_SYSTEM_NAME_VALUE_REDIS,
+      [ATTR_SERVER_ADDRESS]: host,
+      [ATTR_SERVER_PORT]: port,
+    });
+  }
+
+  return attributes;
+}

@@ -20,6 +20,10 @@
  * @see https://github.com/open-telemetry/opentelemetry-js/tree/main/semantic-conventions#unstable-semconv
  */
 
+// OLD Semantic Convention Attributes
+// These are deprecated and will be removed in future versions.
+// Use STABLE attributes from @opentelemetry/semantic-conventions instead.
+
 /**
  * Deprecated, use `server.address`, `server.port` attributes instead.
  *
@@ -74,8 +78,27 @@ export const ATTR_NET_PEER_NAME = 'net.peer.name' as const;
  */
 export const ATTR_NET_PEER_PORT = 'net.peer.port' as const;
 
+// ============================================================================
+// STABLE Semantic Convention Values
+// These are the stable replacements for the deprecated attributes above.
+// ============================================================================
+
+/**
+ * ADDED: Enum value "redis" for attribute {@link ATTR_DB_SYSTEM_NAME}.
+ * This is the STABLE replacement for DB_SYSTEM_VALUE_REDIS.
+ *
+ * [Redis](https://redis.io/)
+ *
+ * Used with STABLE semantic conventions when OTEL_SEMCONV_STABILITY_OPT_IN
+ * is set to 'database' or 'database/dup'.
+ *
+ * @experimental This enum value is experimental and is subject to breaking changes in minor releases of `@opentelemetry/semantic-conventions`.
+ */
+export const DB_SYSTEM_NAME_VALUE_REDIS = 'redis' as const;
+
 /**
  * Enum value "redis" for attribute {@link ATTR_DB_SYSTEM}.
+ * This is the OLD (experimental) value, use DB_SYSTEM_NAME_VALUE_REDIS for STABLE conventions.
  *
  * Redis
  *
