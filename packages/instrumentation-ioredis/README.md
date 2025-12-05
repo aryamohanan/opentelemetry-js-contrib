@@ -100,17 +100,41 @@ requestHook: function (
 
 ## Semantic Conventions
 
-This package uses `@opentelemetry/semantic-conventions` version `1.22+`, which implements Semantic Convention [Version 1.7.0](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.7.0/semantic_conventions/README.md)
+Database semantic conventions (semconv) were stabilized in v1.34.0, and a [migration process](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/non-normative/db-migration.md) was defined.
 
-Attributes collected:
+The latest `@opentelemetry/instrumentation-ioredis` include support for migrating to stable Database semantic conventions, as described below.
+The intent is to provide an approximate 6 month time window for users of this instrumentation to migrate to the new Database semconv, after which a new minor version will use the new semconv by default and drop support for the old semconv.
 
-| Attribute              | Short Description                                                           |
-| ---------------------- | --------------------------------------------------------------------------- |
-| `db.connection_string` | The connection string used to connect to the database.                      |
-| `db.statement`         | The database statement being executed.                                      |
-| `db.system`            | An identifier for the database management system (DBMS) product being used. |
-| `net.peer.name`        | Remote hostname or similar.                                                 |
-| `net.peer.port`        | Remote port number.                                                         |
+To select which semconv version(s) is emitted from this instrumentation, use the `OTEL_SEMCONV_STABILITY_OPT_IN` environment variable.
+
+- `database`: emit the new (stable) v1.34.0+ semantics
+- `database/dup`: emit **both** the old v1.27.0 and the new (stable) v1.34.0+ semantics
+- By default, if `OTEL_SEMCONV_STABILITY_OPT_IN` includes neither of the above tokens, the old v1.27.0 semconv is used.
+
+### Attributes collected
+
+| v1.27.0 semconv         | v1.34.0 semconv                                 | Short Description                                                                          |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `db.connection_string`  | Removed                                         | String used to connect to the database                                                     |
+| `db.user`               | Removed                                         | User used to connect to the database                                                       |
+| `db.name`               | Removed, integrated into the new `db.namespace` | The name of the database.                                                                  |
+| (not included)          | `db.namespace`                                  | The name of the database, fully qualified within the server address and port.              |
+| `db.statement`          | `db.query.text`                                 | The database query being executed.                                                         |
+| `db.system`             | `db.system.name`                                | The database management system (DBMS) product as identified by the client instrumentation. |
+| `net.peer.port`         | `server.port`                                   | Remote port number.                                                                        |
+| `net.peer.name`         | `server.address`                                | Remote hostname or similar.                                                                |
+| (not included)          | `db.operation.name`                             | The name of the operation being executed.                                                  |
+
+### Upgrading Semantic Conventions
+
+When upgrading to the new semantic conventions, it is recommended to do so in the following order:
+
+1. Upgrade `@opentelemetry/opentelemetry-instrumentation-ioredis` to the latest version
+2. Set `OTEL_SEMCONV_STABILITY_OPT_IN=database/dup` to emit both old and new semantic conventions
+3. Modify alerts, dashboards, metrics, and other processes to expect the new semantic conventions
+4. Set `OTEL_SEMCONV_STABILITY_OPT_IN=database` to emit only the new semantic conventions
+
+This will cause both the old and new semantic conventions to be emitted during the transition period.
 
 ## Useful links
 
