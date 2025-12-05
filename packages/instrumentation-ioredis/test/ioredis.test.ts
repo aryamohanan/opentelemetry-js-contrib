@@ -65,7 +65,7 @@ const memoryExporter = new InMemorySpanExporter();
 
 const CONFIG = {
   host: process.env.OPENTELEMETRY_REDIS_HOST || 'localhost',
-  port: parseInt(process.env.OPENTELEMETRY_REDIS_PORT || '6379', 10),
+  port: parseInt(process.env.OPENTELEMETRY_REDIS_PORT || '63790', 10),
 };
 
 const REDIS_URL = `redis://${CONFIG.host}:${CONFIG.port}`;

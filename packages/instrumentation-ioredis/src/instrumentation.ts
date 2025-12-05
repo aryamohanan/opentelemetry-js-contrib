@@ -132,7 +132,30 @@ export class IORedisInstrumentation extends InstrumentationBase<IORedisInstrumen
         return original.apply(this, arguments);
       }
 
-      const operationName = cmd.name;
+      let operationName = cmd.name;
+      const command = cmd as any;
+
+      /**
+       * ioredis sets metadata differently for MULTI/EXEC vs pipelines:
+       * - MULTI/EXEC: queued commands have inTransaction = true; pipelineIndex tracks order in the transaction.
+       * - Pipeline: commands have inTransaction = false; pipelineIndex increments per command (0, 1, 2…).
+       *
+       * Control commands ('multi'/'exec') are not prefixed.
+       * These flags are used to prefix operation names so spans reflect transactional or pipelined commands.
+       */
+      if (
+        command.inTransaction &&
+        cmd.name !== 'multi' &&
+        cmd.name !== 'exec'
+      ) {
+        operationName = `MULTI ${cmd.name}`;
+      } else if (
+        command.pipelineIndex != null &&
+        cmd.name !== 'multi' &&
+        cmd.name !== 'exec'
+      ) {
+        operationName = `PIPELINE ${cmd.name}`;
+      }
 
       const { host, port } = this.options;
 
