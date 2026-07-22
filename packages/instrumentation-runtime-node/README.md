@@ -70,6 +70,35 @@ nodejs_performance_event_loop_utilization 0.010140079547955264
 | [`captureUncaughtException`](./src/types.ts#L31) | `bool` | - | `false` | Whether to emit a `LogRecord` for uncaught exceptions (severity `FATAL`). Uses the `uncaughtExceptionMonitor` process event. |
 | [`applyCustomExceptionAttributes`](./src/types.ts#L43) | `function` | - | `undefined` | Optional callback to attach custom attributes to emitted exception log records. |
 
+## Metrics
+
+All metrics are [experimental](https://opentelemetry.io/docs/specs/otel/versioning-and-stability/#experimental) and subject to breaking changes.
+
+### Event loop
+
+| Metric | Type | Unit | Attribute(s) | Description |
+|---|---|---|---|---|
+| `nodejs.eventloop.time` | ObservableCounter | `s` | `nodejs.eventloop.state` (`active`, `idle`) | Cumulative duration the event loop has been in each state |
+| `nodejs.eventloop.utilization` | ObservableGauge | `1` | — | Event loop utilization ratio (0.0–1.0) |
+| `nodejs.eventloop.delay.min` | ObservableGauge | `s` | — | Minimum event loop delay |
+| `nodejs.eventloop.delay.max` | ObservableGauge | `s` | — | Maximum event loop delay |
+| `nodejs.eventloop.delay.mean` | ObservableGauge | `s` | — | Mean event loop delay |
+| `nodejs.eventloop.delay.stddev` | ObservableGauge | `s` | — | Standard deviation of event loop delay |
+| `nodejs.eventloop.delay.p50` | ObservableGauge | `s` | — | 50th-percentile event loop delay |
+| `nodejs.eventloop.delay.p90` | ObservableGauge | `s` | — | 90th-percentile event loop delay |
+| `nodejs.eventloop.delay.p99` | ObservableGauge | `s` | — | 99th-percentile event loop delay |
+
+### V8 heap & GC
+
+| Metric | Type | Unit | Attribute(s) | Description |
+|---|---|---|---|---|
+| `v8js.gc.duration` | Histogram | `s` | `v8js.gc.type` (`major`, `minor`, `incremental`, `weakcb`) | GC pause duration by type |
+| `v8js.memory.heap.space.size` | ObservableUpDownCounter | `By` | `v8js.heap.space.name` | Total pre-allocated size of a heap space |
+| `v8js.memory.heap.used` | ObservableGauge | `By` | `v8js.heap.space.name` | Used heap memory in a heap space |
+| `v8js.memory.heap.space.available_size` | ObservableGauge | `By` | `v8js.heap.space.name` | Available size in a heap space |
+| `v8js.memory.heap.space.physical_size` | ObservableGauge | `By` | `v8js.heap.space.name` | Committed (physical) size of a heap space |
+| `v8js.resource.active` | ObservableGauge | `{resource}` | `v8js.resource.type` | Count of active resources keeping the event loop alive |
+
 ## Useful links
 
 - For more information on OpenTelemetry, visit: <https://opentelemetry.io/>
